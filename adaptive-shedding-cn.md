@@ -146,9 +146,7 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
 
 容量计算是第二个难点，怎么动态评估系统当前容量是算法的关键点之一。计算公式如下：
 
-```go
-maxPass * windows * minRt / 1000
-```
+<img width="619" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/c7df44e6-8935-479b-b8f1-ea7ba4015ebb">
 
 先解释一下各个参数的含义：
 
