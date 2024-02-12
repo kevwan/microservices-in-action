@@ -43,6 +43,7 @@ benchmarkCPU-10    	     330	   3600743 ns/op
 ```yaml
 Timeout: 1000
 Middlewares:
+  Breaker: false
   Shedding: false
 ```
 
@@ -70,22 +71,28 @@ Middlewares:
 #### 2.2.2 场景二（开启过载保护）
 ```yaml
 Timeout: 1000
+Middlewares:
+  Breaker: false
 ```
 
 - 开启过载保护（默认）
 - 超时 1s
 - `loops 2 hey -c 200 -z 60m "http://localhost:8888/ping"`
-  ![image](https://github.com/kevwan/microservices-in-action/assets/1918356/0599e7db-0ba0-4914-8849-23e286304b5c)
-- 总 qps 大概在 4000-5000 左右
-- 拒绝了约 90% 的过载请求
-  ![image](https://github.com/kevwan/microservices-in-action/assets/1918356/44169738-7a3d-4cb6-af1b-8534e5b9d8d4)
-- 成功处理请求在 400-450 qps 左右
-  ![image](https://github.com/kevwan/microservices-in-action/assets/1918356/4a3cae8f-4ba3-4e0d-8801-e1c498d88300)
-- 处理时延 p99 约 600ms，p90 约 150ms
+  <img width="815" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/c3b1dab6-340f-4737-b52e-0e32f3ec6868">
+- 总 qps 大概在 10000 左右，流量大约是系统容量的 20 倍
+- 拒绝了约 95% 的过载请求
+  <img width="814" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/23d93245-90e4-4aef-ae3d-b9ad352b162e">
+- 成功处理请求在 300+ qps，其中很大一部分 CPU 消耗被拒绝掉的请求消耗了（每个请求再小的消耗也会累加起来）
+  <img width="812" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/5fe07035-6843-4fab-a2d6-b0007df2a974">
+- 处理时延 p99 不到 700ms
+
+​      <img width="813" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/f1ae0866-84fd-4ced-b7d4-6dc2c9c85561">
+
+- 处理时延 p90 不到 25ms
 
 ### 2.3 压测结论：
 
-- 流量未知的情况下，保障系统不卡死（无过载保护情况下，CPU 满载一般表现为大量请求超时），且保证了系统容量的 400 qps 正常提供服务
+- 流量未知的情况下，保障系统不卡死（无过载保护情况下，CPU 满载一般表现为大量请求超时），且保证了系统容量的 400 qps 没有大幅下降
 - 自动拒绝了过量的请求，避免过量请求浪费系统资源（即使处理，系统最后返回给用户的也是不可用错误、超时错误等）
 
 ## 3. 自适应过载保护原理
