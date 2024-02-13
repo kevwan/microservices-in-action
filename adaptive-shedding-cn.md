@@ -99,7 +99,7 @@ Middlewares:
 
 先上一张总的设计图，从整体上说明了自适应过载保护的设计思路，也可以看完下面原理解析再回头来看这张图。
 
-<img width="1091" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/1d27d548-680d-441b-9776-d80e89264c48">
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/467fa746-ebe7-4401-b3b8-5182cd962c81)
 
 ### 3.1 CPU 使用率
 
