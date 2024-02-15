@@ -187,7 +187,7 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
 
 <img width="565" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/ccf2000f-96bc-4ce5-9dc5-705df7e759e5">
 
-其中 0.1 是用来保证不管负载多高，至少放过估算出来的系统容量的 10% 的请求，否则整个服务就完全不可用了。CPU 负载反馈因子随着 CPU 负载的变化如下图：
+反馈因子的效果类似于神经网络中的 ReLU 激活函数。其中 0.1 是用来保证不管负载多高，至少放过估算出来的系统容量的 10% 的请求，否则整个服务就完全不可用了。CPU 负载反馈因子随着 CPU 负载的变化如下图：
 
 <img width="920" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/9d9eec08-9835-4501-9932-d477d7283025">
 
