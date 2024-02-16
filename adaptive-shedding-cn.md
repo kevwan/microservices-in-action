@@ -242,9 +242,9 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
 
 go-zero 的三类服务都已经默认集成了自适应过载保护：
 
-- restful service
-- gRPC service
-- gateway service
+- **Restful service**
+- **gRPC service**
+- **Gateway service**
 
 确保你在使用 go-zero 的时候，无需额外代码和配置，服务默认都是有自适应过载保护的。这也秉承了 go-zero 一贯追求最简原则，不给用户带来额外的心智负担。
 
