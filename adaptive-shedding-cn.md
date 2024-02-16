@@ -12,7 +12,7 @@
 - 服务端自适应熔断
 - 客户端自适应熔断
 
-当然，我们还有自动适配后端服务能力的负载均衡算法，对稳定性进一步保驾护航。本文主要讲解自适应过载的原理、场景和表现。
+当然，我们还有自动适配后端服务能力的负载均衡算法，对稳定性进一步保驾护航。本文主要讲解自适应过载保护的原理、场景和表现。
 
 ## 2. 自适应过载保护压测
 
@@ -78,7 +78,7 @@ Middlewares:
 - 开启过载保护（默认）
 - 超时 1s
 - `loops 2 hey -c 200 -z 60m "http://localhost:8888/ping"`
-  <img width="815" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/c3b1dab6-340f-4737-b52e-0e32f3ec6868">
+  <img width="812" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/d336aff2-f7b1-477d-87a3-c9b1af474a8e">
 - 总 qps 大概在 10000 左右，流量大约是系统容量的 20 倍
 - 拒绝了约 95% 的过载请求
   <img width="814" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/23d93245-90e4-4aef-ae3d-b9ad352b162e">
@@ -179,6 +179,10 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
 
 如果当前并发请求数大于这里算出的系统容量，那么就会拒绝请求，所以这里估算系统容量是关键所在，也是整个算法最难理解的部分。
 
+附一个图来说明怎么计算任一时间点的并发请求数的，假设 QPS 是 1000，每个请求的 `minRt` 是 10ms。
+
+<img width="1480" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/81353bfa-0f6f-4e9d-8b66-490eb6b48150">
+
 ### 3.3 CPU 负载反馈因子
 
 当 CPU 负载超过了设置的阈值时，我们期望 CPU 越高，对请求的拒绝比例越高，否则 CPU 依然有可能越来越靠近 100%。
@@ -187,7 +191,7 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
 
 <img width="565" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/ccf2000f-96bc-4ce5-9dc5-705df7e759e5">
 
-反馈因子的效果类似于神经网络中的 ReLU 激活函数。其中 0.1 是用来保证不管负载多高，至少放过估算出来的系统容量的 10% 的请求，否则整个服务就完全不可用了。CPU 负载反馈因子随着 CPU 负载的变化如下图：
+反馈因子的效果类似于神经网络中的 ReLU 激活函数。其中 0.1（兜底的经验值）是用来保证不管负载多高，至少放过估算出来的系统容量的 10% 的请求，否则整个服务就完全不可用了。CPU 负载反馈因子随着 CPU 负载的变化如下图：
 
 <img width="920" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/9d9eec08-9835-4501-9932-d477d7283025">
 
@@ -195,7 +199,15 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
 
 ![image](https://github.com/kevwan/microservices-in-action/assets/1918356/a10e4fcf-6f27-4f6c-9195-c843184388c4)
 
-### 3.4 如何判断是否拒绝请求
+### 3.4 过载保护计算公式
+
+把上面所有计算逻辑归总到计算公式里，如下图：
+
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/b2af0b70-9250-4aae-a1f5-ce3250db5af3)
+
+这就是计算当前系统允许的最大并发请求数，超过这个值就会拒绝请求。
+
+### 3.5 如何判断是否拒绝请求
 
 对于一个请求是否需要拒绝。判断逻辑如下：
 
@@ -210,7 +222,7 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
   - 计算当前系统容量  `maxPass * windows * minRt / 1000`
   - 并发请求数是否大于当前系统容量，如是则拒绝请求
 
-### 3.5 跟 Kubernetes HPA 的协同
+### 3.6 跟 Kubernetes HPA 的协同
 
 当我们在使用 Kubernetes 并设置了 HPA 根据 CPU 使用率自动伸缩的时候，Kubernetes 默认会在 4 个连续的 15 秒探测周期探测到 CPU 使用率超标（有 0.9 - 1.1 的容忍幅度）时，启动增加 pod 来应对系统容量不足，但这需要分钟级扩容，且当系统资源不够或者 pod 数达到最大设置时不生效。此时，过载保护可以在 Kubernetes 未来得及扩容或者集群容量不足时保护我们的系统不被打到卡死。
 
