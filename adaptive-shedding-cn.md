@@ -33,7 +33,7 @@
 benchmarkCPU-10    	     330	   3600743 ns/op
 ```
 
-从 `benchmark` 结果可以看出单个请求的逻辑处理需要 3.6ms CPU资源（不包括服务端中间件处理消耗）。对于两核的容器来说，qps 上限约为 550（2000/3.6）。但是我们是一个 HTTP server，肯定还有接受请求、处理请求等逻辑处理的开销，实际上是达不到 550qps 的。
+从 `benchmark` 结果可以看出单个请求的逻辑处理需要 3.6ms CPU资源（不包括服务端中间件处理消耗）。对于两核的容器来说，qps 上限约为 550（2000/3.6）。但是我们是一个 HTTP server，肯定还有接受请求、解析请求、返回结果等开销，实际上是达不到 550qps 的。
 
 这个模拟 CPU 的代码本身不重要，就不做介绍了。
 
@@ -53,14 +53,12 @@ Middlewares:
 - `loops 2 hey -c 200 -z 60m "http://localhost:8888/ping"`
   - `loops` 是我的一个 `alias`：`loops='fs() {for i in {1..$1}; do ${@:2} & done; wait}; fs'`，用来并行执行给定命令指定的次数
 
-  ![image](https://github.com/kevwan/microservices-in-action/assets/1918356/96f72b7e-d085-4c78-9cbf-3536c537b434)
-  
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/96f72b7e-d085-4c78-9cbf-3536c537b434)  
 - 可以看到系统总共只处理了大概 500qps 的请求，其中 400qps 多一点是成功的，近 100qps 是超时的（返回了 503 状态码）
   
-- ![image](https://github.com/kevwan/microservices-in-action/assets/1918356/7b54b46b-74cd-4f68-9675-f933e72a09e8)
-  
-- 随着请求的堆积，很快就会大量请求都超时了，并且p99，甚至p90都已经超过 1s 了
 
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/7b54b46b-74cd-4f68-9675-f933e72a09e8)  
+- 随着请求的堆积，很快就会大量请求都超时了，并且p99，甚至p90都已经超过 1s 了
 - 这里进一步解释一下，超时的请求意味着对系统资源的浪费，比如接受到一个请求，花了不少cpu时间处理完了，然后返回结果时，发现请求已经超时了，用户已经收到了类似“服务器繁忙，请稍后再试！”的提示。这里可能有用户会说，go不是有超时控制吗？这里有两点：
   - 超时不是在代码的每个指令处都能先判断是否超时再执行，比如我们有一个for循环，不会每次都先判断ctx是否超时，然后再执行下一次迭代，如果你真的这样写了，性能可能需要特别关注，得看你每次循环的计算和判断超时的开销对比
   - 即使能够比较好的判断超时，在侦测到超时之前也已经白费了一些系统资源处理请求了
@@ -75,16 +73,14 @@ Middlewares:
 - 开启过载保护（默认）
 - 超时 1s
 - `loops 2 hey -c 200 -z 60m "http://localhost:8888/ping"`
-  <img width="812" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/d336aff2-f7b1-477d-87a3-c9b1af474a8e">
+  ![image](https://github.com/kevwan/microservices-in-action/assets/1918356/560afecf-51e8-46ad-9aad-bf0651708bf6)
 - 总 qps 大概在 10000 左右，流量大约是系统容量的 20 倍
 - 拒绝了约 95% 的过载请求
-  <img width="814" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/23d93245-90e4-4aef-ae3d-b9ad352b162e">
-- 成功处理请求在 300+ qps，其中很大一部分 CPU 消耗被拒绝掉的请求消耗了（每个请求再小的消耗也会累加起来）
-  <img width="812" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/5fe07035-6843-4fab-a2d6-b0007df2a974">
+  ![image](https://github.com/kevwan/microservices-in-action/assets/1918356/1566d831-f03b-42c0-b2e0-abf8a805f352)
+- 成功处理请求在 360-400 qps，大概损失了 10% 的 qps，被拒绝的近 1000qps 请求也需要消耗少量系统资源（从接受请求到被拒绝）
+  <img width="812" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/d06cb9f0-b3ba-4cb7-a536-6e02ef6cc0d2">
 - 处理时延 p99 不到 700ms
-
-​      <img width="813" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/f1ae0866-84fd-4ced-b7d4-6dc2c9c85561">
-
+  ![image](https://github.com/kevwan/microservices-in-action/assets/1918356/b886a1e6-cfeb-4f5d-bd2c-40e9076bb9bc)
 - 处理时延 p90 不到 25ms
 
 ### 2.3 压测结论：
@@ -163,9 +159,7 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
 先解释一下各个参数的含义：
 
 - `maxPass` 是当前记录的所有窗口里面最大的成功处理的请求数，go-zero 是 100ms 一个窗口，记录了 50 个窗口，这里就是算过去 50 个窗口里最多成功处理请求的一个窗口里的请求数
-
 - `minRt` 是指以窗口为单位的最小平均请求耗时，单位毫秒，比如某个窗口里的 RT 是 50ms，且是所有窗口里最小的，那么这个 `minRt` 就是 50
-
 - `windows` 是指每秒有多少个窗口
 
 我来一步一步推导一下这个公式怎么来的。
@@ -192,9 +186,25 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
 
 <img width="920" alt="image" src="https://github.com/kevwan/microservices-in-action/assets/1918356/9d9eec08-9835-4501-9932-d477d7283025">
 
-通过实际测试数据，在系统容量 8 倍的流量压力下，依然可以保持稳定的有效 QPS 和 p99 时延。
+对比有无 CPU 反馈因子的情况：
 
-![image](https://github.com/kevwan/microservices-in-action/assets/1918356/a10e4fcf-6f27-4f6c-9195-c843184388c4)
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/c58b0c6d-b4be-49c4-8b59-a2290d3a4fb4)
+
+- 加了反馈因子后能接受更多请求，从不到 3000qps 上升到了 5000qps 左右，上图是拒绝的请求
+
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/69b316e9-99f8-4eb3-8bdf-21ddd1707be5)
+
+- 成功处理的请求数有略微下降，因为进来的请求变多了，拒绝请求消耗了少量资源
+
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/11d2c99a-d54f-4bb2-9523-3866fa128d5e)
+
+- 加了反馈因子 P99 时延从 900ms 左右，降低到 700ms 左右
+
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/ac1ace29-7363-4fae-9e2f-4e7d892c9804)
+
+- 加了反馈因子 P90 从 250ms 降到了 50ms
+
+由此可见，CPU 负载反馈因子的作用还是很明显的。
 
 ### 3.4 过载保护计算公式
 
@@ -214,10 +224,35 @@ go-zero 里对于滑动平均的超参 `beta` 取值 0.95，相当于最后 20 �
 
 - 首先判断 CPU 是否超标（默认 90%）
 - 再判断是否在冷却期（1s）
-
 - 两者有其一，则计算是否拒绝
   - 计算当前系统容量  `maxPass * windows * minRt / 1000`
   - 并发请求数是否大于当前系统容量，如是则拒绝请求
+
+至此，原理基本讲完了，还有一些实现细节和技巧你可以翻看 go-zero 源码。
+
+我们再来看一下系统容量 10 倍流量的场景下整体表现：
+
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/fe7d4255-dcdd-49cd-a587-7a46a3641dab)
+
+- 成功处理的 qps 在 400 左右
+
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/bb1dec53-7ba6-414e-8292-6476008b9742)
+
+- 拒绝了大概 90% 的请求
+
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/e3ce6392-cdc0-490b-9cc6-89d30527fce2)
+
+- P99 时延控制在 20-24ms 之间
+
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/7c003c3a-026c-41d2-a3c1-cfb6f2b0d556)
+
+- P90 时延在 5ms 以下
+
+![image](https://github.com/kevwan/microservices-in-action/assets/1918356/da19bc3c-ed35-4263-b0b7-02b85fbdd577)
+
+- CPU 峰值控制在 95% 以下
+
+如文档开始的压测数据，如果不是过载保护，在不到 600 qps 的情况下，P99 甚至 P90 都已经到了 1s 的超时阈值了，服务基本已经开始不可用了。
 
 ### 3.6 跟 Kubernetes HPA 的协同
 
