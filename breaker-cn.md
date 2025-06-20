@@ -4,7 +4,7 @@
 
 在分布式微服务架构中，服务之间的调用是不可避免的。当某个服务出现故障或性能下降时，如果没有有效的保护机制，故障会像雪崩一样传播到整个系统，导致整个服务链路的崩溃。熔断器（Circuit Breaker）正是为了解决这个问题而生的重要组件。
 
-go-zero 作为一个功能完整的微服务框架，内置了功能强大且高性能的熔断器模块。本文将深入解析 go-zero 中 `core/breaker` 包的设计理念、实现机制以及在实际项目中的应用方式。
+go-zero 作为一个功能完整的微服务框架，内置了功能强大且高性能的熔断器模块。本文将深入解析 go-zero 中 `breaker` 包的设计理念、实现机制以及在实际项目中的应用方式。
 
 ## 熔断器设计概念
 
@@ -12,7 +12,7 @@ go-zero 作为一个功能完整的微服务框架，内置了功能强大且高
 
 熔断器是一种用于防止故障传播的保护机制，类似于电路中的保险丝。当检测到某个服务的错误率超过阈值时，熔断器会"开启"，暂时阻止对该服务的请求，从而避免资源浪费和故障扩散。
 
-### 熔断器的三种状态
+### 典型熔断器的三种状态
 
 1. **关闭状态（Closed）**：正常状态，所有请求都会通过
 2. **开启状态（Open）**：熔断状态，所有请求都会被拒绝
@@ -44,7 +44,7 @@ type Breaker interface {
 }
 ```
 
-这个接口设计非常优雅，提供了多种使用方式：
+这个接口设计提供了多种使用方式：
 
 - `Allow()` 方法返回 Promise，需要手动调用 `Accept()` 或 `Reject()`
 - `Do()` 系列方法直接执行函数，自动处理结果
@@ -131,20 +131,7 @@ func BreakerHandler(method, path string, metrics *stat.Metrics) func(http.Handle
 }
 ```
 
-### 2. 配置示例
-
-```go
-// rest 服务配置
-RestConf struct {
-    service.ServiceConf
-    Host         string `json:",default=0.0.0.0"`
-    Port         int
-    Breaker      bool `json:",default=true"`  // 默认开启熔断器
-    // ... 其他配置
-}
-```
-
-### 3. 实际效果
+### 2. 实际效果
 
 当某个 API 接口错误率过高时：
 
@@ -207,23 +194,6 @@ func convertError(err error) error {
 }
 ```
 
-### 3. 配置和启用
-
-```go
-// zrpc 服务配置
-RpcServerConf struct {
-    service.ServiceConf
-    ListenOn      string
-    Middlewares   MiddlewaresConf
-    // ... 其他配置
-}
-
-type MiddlewaresConf struct {
-    Breaker    bool `json:",default=true"`  // 默认启用熔断器
-    // ... 其他中间件配置
-}
-```
-
 ## 高级使用技巧
 
 ### 1. 全局熔断器使用
@@ -235,13 +205,12 @@ err := breaker.Do("user-service", func() error {
     return userService.GetUser(ctx, userID)
 })
 
-if err != nil {
-    if errors.Is(err, breaker.ErrServiceUnavailable) {
-        // 熔断器开启，使用降级逻辑
-        return getDefaultUser(), nil
-    }
-    return nil, err
+if errors.Is(err, breaker.ErrServiceUnavailable) {
+    // 熔断器开启，使用降级逻辑
+    return getGuestUser(), nil
 }
+
+// 后续处理逻辑
 ```
 
 ### 2. 自定义错误判断
@@ -348,10 +317,8 @@ func isRetryableError(err error) bool {
         return true  // 超时错误可重试
     case errors.Is(err, syscall.ECONNREFUSED):
         return true  // 连接拒绝可重试
-    case isBizError(err):
-        return false // 业务错误不重试
     default:
-        return true
+        return false // 业务错误等其它未知错误不重试
     }
 }
 
@@ -385,25 +352,6 @@ func getUserWithFallback(userID string) (*User, error) {
 }
 ```
 
-### 4. 配置建议
-
-```go
-// 生产环境配置建议
-const (
-    // 数据库操作：较为严格的熔断策略
-    DatabaseWindow = 10 * time.Second
-    DatabaseBuckets = 40
-
-    // HTTP API：相对宽松的熔断策略
-    APIWindow = 30 * time.Second
-    APIBuckets = 60
-
-    // 缓存操作：最宽松的熔断策略
-    CacheWindow = 60 * time.Second
-    CacheBuckets = 120
-)
-```
-
 ## 性能考量
 
 ### 1. 内存使用
@@ -435,53 +383,20 @@ go-zero 的熔断器使用固定大小的滑动窗口，内存使用量是可预
 
 #### 问题 1：熔断器过于敏感
 
-```text
 解决方案：
 - 调整 acceptable 函数，排除不应该触发熔断的错误
-- 增加保护值，提高熔断阈值
 - 检查是否有大量的假阳性错误
-```
 
 #### 问题 2：熔断器不生效
 
-```text
 解决方案：
 - 确认熔断器配置已启用
 - 检查错误率是否达到熔断阈值
 - 验证 Promise.Reject() 是否被正确调用
-```
-
-#### 问题 3：恢复时间过长
-
-```text
-解决方案：
-- 减少 forcePassDuration 时间
-- 优化下游服务的恢复速度
-- 考虑使用主动健康检查
-```
-
-### 2. 调试技巧
-
-```go
-// 启用详细日志
-import "github.com/zeromicro/go-zero/core/logx"
-
-// 在测试环境中打印熔断器状态
-func debugBreakerStatus(name string) {
-    breaker := getBreaker(name)
-    promise, err := breaker.Allow()
-    if err != nil {
-        logx.Errorf("Breaker %s is OPEN: %v", name, err)
-    } else {
-        logx.Infof("Breaker %s is CLOSED", name)
-        promise.Accept() // 记得接受测试请求
-    }
-}
-```
 
 ## 总结
 
-go-zero 的熔断器模块是一个设计精良、性能卓越的系统保护组件。它基于 Google SRE 的最佳实践，提供了：
+go-zero 的熔断器模块是一个设计精良、性能优秀的系统保护组件。它基于 Google SRE 的最佳实践，提供了：
 
 1. **智能的熔断算法**：自适应调整熔断策略，避免误判
 2. **完善的集成机制**：在 REST 和 gRPC 服务中自动生效
