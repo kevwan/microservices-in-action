@@ -177,8 +177,7 @@ func LoginHandler(ctx context.Context, req *LoginRequest) (*LoginResponse, error
     // 输出: {"name":"alice","password":"******","phone":"138****1234","email":"a***e@example.com"}
 
     // LogField 中的敏感数据也会被脱敏
-    logx.InfovWithDuration(ctx, "user login", time.Millisecond*100,
-        logx.LogField{Key: "user", Value: user},
+    logx.Infow(ctx, "user login", logx.LogField{Key: "user", Value: user},
         logx.LogField{Key: "ip", Value: "192.168.1.1"})
 }
 ```
