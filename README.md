@@ -11,5 +11,4 @@ The collection of articles on design principles and best practices in microservi
 
 ## Todo
 
-- 日志脱敏用法
 - HTTP 超时控制设计和防 DoS 攻击
