@@ -245,7 +245,7 @@ func (m *UserModel) CreateUser(ctx context.Context, user *User) error {
 func (m *UserModel) UpdateUser(ctx context.Context, user *User) error {
     query := "UPDATE users SET name = ?, email = ?, update_at = UNIX_TIMESTAMP() WHERE id = ?"
 
-    _, err := m.conn.ExecCtx(ctsqlx.WithWrite(ctx), query, user.Name, user.Email, user.ID)
+    _, err := m.conn.ExecCtx(sqlx.WithWrite(ctx), query, user.Name, user.Email, user.ID)
     return err
 }
 
