@@ -133,6 +133,8 @@ type User struct {
 }
 
 // 实现 Sensitive 接口
+// 注意：(u User) 这样的值传递对值类型的对象和指针类型的对象都有效，
+// 而 (u *User) 这样的指针传递只对指针类型的对象有效，对值类型的对象不生效
 func (u User) MaskSensitive() any {
     return User{
         Name:     u.Name,
