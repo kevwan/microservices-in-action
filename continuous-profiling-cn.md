@@ -154,7 +154,7 @@ hey -c 100 -z 60m "http://localhost:8888/ping"
 
 ### 6. 查看CPU负载Profiling图
 
-访问 http://localhost:4040，在 Pyroscope 界面中可以看到实时的性能数据：
+访问 http://localhost:4040 ，在 Pyroscope 界面中可以看到实时的性能数据：
 
 ![](https://cdn.learnku.com/uploads/images/202506/11/73865/fTno1IUZcr.jpg!large)
 
